@@ -530,6 +530,23 @@
             transform: translateY(0);
         }
 
+        .test-btn {
+            margin-top: 12px;
+            width: 100%;
+            padding: 12px 30px;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .test-btn:hover {
+            background: #f5f5ff;
+        }
+
         .settings-status {
             margin-top: 15px;
             padding: 10px;
@@ -548,6 +565,13 @@
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+
+        .settings-status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            display: block;
         }
     </style>
 </head>
@@ -1073,6 +1097,47 @@
             }
         }
 
+        async function testAIConnection() {
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const model = document.getElementById('aiModel').value.trim();
+            const testStatus = document.getElementById('testStatus');
+
+            testStatus.textContent = '正在测试AI连接...';
+            testStatus.className = 'settings-status loading';
+            testStatus.style.display = 'block';
+
+            try {
+                const payload = {};
+                if (apiUrl) payload.api_url = apiUrl;
+                if (apiKey) payload.api_key = apiKey;
+                if (model) payload.model = model;
+
+                const response = await fetch('/api/ai/test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    const durationText = data.duration_ms ? `（${data.duration_ms} ms）` : '';
+                    const preview = data.response_preview ? `：${data.response_preview}` : '';
+                    testStatus.textContent = `连接成功${durationText}${preview}`;
+                    testStatus.className = 'settings-status success';
+                } else {
+                    testStatus.textContent = '测试失败: ' + (data.error || '未知错误');
+                    testStatus.className = 'settings-status error';
+                }
+            } catch (error) {
+                testStatus.textContent = '测试失败: ' + error.message;
+                testStatus.className = 'settings-status error';
+            }
+        }
+
         // Close modal when clicking outside
         window.onclick = function(event) {
             const modal = document.getElementById('settingsModal');
@@ -1114,12 +1179,13 @@
                     </div>
 
                     <button class="save-btn" onclick="saveAISettings()">💾 保存设置</button>
+                    <button class="test-btn" onclick="testAIConnection()">🧪 测试AI连接</button>
 
                     <div id="settingsStatus" class="settings-status"></div>
+                    <div id="testStatus" class="settings-status" style="display: none;"></div>
                 </div>
             </div>
         </div>
     </div>
 </body>
 </html>
-

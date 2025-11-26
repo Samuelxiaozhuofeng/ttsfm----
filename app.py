@@ -9,6 +9,7 @@ from datetime import datetime
 import tempfile
 from library import Library
 import requests
+import time
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -34,6 +35,16 @@ VOICES = {
     'nova': Voice.NOVA,
     'shimmer': Voice.SHIMMER
 }
+
+
+def build_chat_endpoint(base_url: str) -> str:
+    """Normalize the chat completions endpoint for OpenAI-compatible APIs."""
+    if not base_url:
+        return ''
+    normalized = base_url.rstrip('/')
+    if normalized.lower().endswith('/chat/completions'):
+        return normalized
+    return f'{normalized}/chat/completions'
 
 @app.route('/')
 def index():
@@ -379,6 +390,77 @@ def save_ai_settings():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/ai/test', methods=['POST'])
+def test_ai_connection():
+    """Test AI API connectivity with provided or saved settings."""
+    try:
+        data = request.get_json() or {}
+        api_url = data.get('api_url', '').strip()
+        api_key = data.get('api_key', '').strip()
+        model = data.get('model', '').strip()
+
+        # Fallback to saved settings if any field missing
+        if not api_url or not api_key or not model:
+            saved = library.get_ai_settings() or {}
+            api_url = api_url or saved.get('api_url', '').strip()
+            api_key = api_key or saved.get('api_key', '').strip()
+            model = model or saved.get('model', '').strip()
+
+        if not api_url or not model or not api_key:
+            return jsonify({'error': '请先填写完整的AI配置'}), 400
+
+        endpoint = build_chat_endpoint(api_url)
+        if not endpoint:
+            return jsonify({'error': 'AI配置不完整'}), 400
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}'
+        }
+        payload = {
+            'model': model,
+            'messages': [
+                {
+                    'role': 'system',
+                    'content': '你是一个测试助手，用于验证API连通性，请简单回答。'
+                },
+                {
+                    'role': 'user',
+                    'content': '如果你收到这条信息，请回复：连接正常'
+                }
+            ],
+            'temperature': 0
+        }
+
+        start = time.perf_counter()
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=20
+        )
+        duration = int((time.perf_counter() - start) * 1000)
+
+        if response.status_code != 200:
+            return jsonify({
+                'error': f'AI API测试失败: {response.text}'
+            }), 500
+
+        result = response.json()
+        assistant_message = result['choices'][0]['message']['content']
+
+        return jsonify({
+            'success': True,
+            'message': 'AI连接正常，可以使用',
+            'response_preview': assistant_message[:120],
+            'duration_ms': duration
+        })
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'AI连接测试超时'}), 500
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'网络错误: {str(e)}'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Chat History Endpoints
 @app.route('/api/chat/history/<chapter_id>', methods=['GET'])
 def get_chat_history(chapter_id):
@@ -451,7 +533,9 @@ def chat_message():
         })
 
         # Call OpenAI compatible API
-        api_url = ai_settings['api_url'].rstrip('/')
+        endpoint = build_chat_endpoint(ai_settings.get('api_url', ''))
+        if not endpoint:
+            return jsonify({'error': 'AI配置不完整'}), 400
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {ai_settings["api_key"]}'
@@ -464,7 +548,7 @@ def chat_message():
         }
 
         response = requests.post(
-            f'{api_url}/chat/completions',
+            endpoint,
             headers=headers,
             json=payload,
             timeout=30
@@ -496,4 +580,3 @@ if __name__ == '__main__':
     print("Starting TTSFM Web Application...")
     print("Open your browser and navigate to: http://localhost:5000")
     app.run(debug=True, host='0.0.0.0', port=5000)
-

@@ -14,26 +14,34 @@ class Library:
         self.data_file = data_file
         self.data = self._load_data()
     
-    def _load_data(self) -> Dict:
-        """Load library data from JSON file"""
-        if os.path.exists(self.data_file):
-            try:
-                with open(self.data_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception as e:
-                print(f"Error loading library data: {e}")
-                return {
-                    'chapters': {},
-                    'progress': {},
-                    'ai_settings': {},
-                    'chat_history': {}
-                }
+    def _get_default_data(self) -> Dict:
+        """Return the default data structure for the library."""
         return {
             'chapters': {},
             'progress': {},
             'ai_settings': {},
             'chat_history': {}
         }
+
+    def _ensure_data_structure(self, data: Dict) -> Dict:
+        """Ensure all expected top-level keys exist in the data."""
+        defaults = self._get_default_data()
+        for key, default_value in defaults.items():
+            if key not in data or not isinstance(data[key], type(default_value)):
+                data[key] = default_value if not isinstance(default_value, dict) else default_value.copy()
+        return data
+
+    def _load_data(self) -> Dict:
+        """Load library data from JSON file"""
+        if os.path.exists(self.data_file):
+            try:
+                with open(self.data_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return self._ensure_data_structure(data)
+            except Exception as e:
+                print(f"Error loading library data: {e}")
+                return self._get_default_data()
+        return self._get_default_data()
     
     def _save_data(self) -> None:
         """Save library data to JSON file"""
@@ -200,4 +208,3 @@ class Library:
         if chapter_id in self.data['chat_history']:
             self.data['chat_history'][chapter_id] = []
             self._save_data()
-

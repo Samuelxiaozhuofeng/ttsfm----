@@ -22,8 +22,18 @@ class Library:
                     return json.load(f)
             except Exception as e:
                 print(f"Error loading library data: {e}")
-                return {'chapters': {}, 'progress': {}}
-        return {'chapters': {}, 'progress': {}}
+                return {
+                    'chapters': {},
+                    'progress': {},
+                    'ai_settings': {},
+                    'chat_history': {}
+                }
+        return {
+            'chapters': {},
+            'progress': {},
+            'ai_settings': {},
+            'chat_history': {}
+        }
     
     def _save_data(self) -> None:
         """Save library data to JSON file"""
@@ -123,4 +133,71 @@ class Library:
     def get_chapter_count(self) -> int:
         """Get total number of chapters"""
         return len(self.data['chapters'])
+
+    # AI Settings Management
+    def save_ai_settings(self, api_url: str, api_key: str, model: str) -> None:
+        """
+        Save AI settings
+
+        Args:
+            api_url: OpenAI compatible API URL
+            api_key: API key for authentication
+            model: Model name to use
+        """
+        self.data['ai_settings'] = {
+            'api_url': api_url,
+            'api_key': api_key,
+            'model': model,
+            'updated_at': datetime.now().isoformat()
+        }
+        self._save_data()
+
+    def get_ai_settings(self) -> Optional[Dict]:
+        """Get AI settings"""
+        return self.data.get('ai_settings')
+
+    # Chat History Management
+    def add_chat_message(self, chapter_id: str, role: str, content: str) -> None:
+        """
+        Add a chat message to chapter's chat history
+
+        Args:
+            chapter_id: ID of the chapter
+            role: Message role ('user' or 'assistant')
+            content: Message content
+        """
+        if chapter_id not in self.data['chat_history']:
+            self.data['chat_history'][chapter_id] = []
+
+        message = {
+            'role': role,
+            'content': content,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        self.data['chat_history'][chapter_id].append(message)
+        self._save_data()
+
+    def get_chat_history(self, chapter_id: str) -> List[Dict]:
+        """
+        Get chat history for a chapter
+
+        Args:
+            chapter_id: ID of the chapter
+
+        Returns:
+            List of chat messages
+        """
+        return self.data['chat_history'].get(chapter_id, [])
+
+    def clear_chat_history(self, chapter_id: str) -> None:
+        """
+        Clear chat history for a chapter
+
+        Args:
+            chapter_id: ID of the chapter
+        """
+        if chapter_id in self.data['chat_history']:
+            self.data['chat_history'][chapter_id] = []
+            self._save_data()
 

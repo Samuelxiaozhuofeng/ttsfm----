@@ -12,8 +12,14 @@
   },
   "progress": {
     "chapter_9ebfcd98bdad": {
-      "current_time": 2.385702,
-      "last_read": "2025-11-26T15:27:25.186406"
+      "current_time": 73.990921,
+      "last_read": "2025-11-26T18:24:10.952980"
     }
+  },
+  "ai_settings": {
+    "api_url": "https://api.tu-zi.com/v1/chat/completions",
+    "api_key": "sk-GSbFbW8g6glihDUpBZafK7CBpyke7ePSGXgWevUYyzut5YCj",
+    "model": "gpt-5o",
+    "updated_at": "2025-11-26T17:52:10.229661"
   }
 }

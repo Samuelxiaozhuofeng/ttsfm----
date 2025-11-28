@@ -642,7 +642,7 @@
                     rows="1"
                     onkeypress="handleChatKeyPress(event)"
                 ></textarea>
-                <button class="send-btn" onclick="sendMessage()" id="sendBtn">
+                <button class="send-btn" onclick="sendMessageStream()" id="sendBtn">
                     发送
                 </button>
             </div>
@@ -862,6 +862,7 @@
                 <div class="message-bubble">${escapeHtml(content)}</div>
             `;
             chatMessages.appendChild(messageDiv);
+            return messageDiv;
         }
 
         function scrollToBottom() {
@@ -869,7 +870,8 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        async function sendMessage() {
+        // 新的流式发送函数
+        async function sendMessageStream() {
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
 
@@ -886,6 +888,10 @@
             addMessageToUI('user', message);
             chatHistory.push({ role: 'user', content: message });
 
+            // 创建一个空的 assistant 气泡，用于逐步填充
+            const assistantDiv = addMessageToUI('assistant', '');
+            const assistantBubble = assistantDiv.querySelector('.message-bubble');
+
             // Clear input
             input.value = '';
             scrollToBottom();
@@ -901,27 +907,56 @@
                     },
                     body: JSON.stringify({
                         chapter_id: chapterId,
-                        message: message
+                        message: message,
+                        stream: true
                     })
                 });
 
-                const data = await response.json();
+                if (!response.ok) {
+                    typingIndicator.classList.remove('active');
+                    assistantBubble.textContent = '抱歉，AI接口错误：' + response.statusText;
+                    return;
+                }
 
-                // Hide typing indicator
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+                let fullText = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // SSE 按 \n\n 分片
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop(); // 最后一段可能是不完整的
+
+                    for (const part of parts) {
+                        const line = part.trim();
+                        if (!line.startsWith('data:')) continue;
+                        const text = line.slice(5).trim();
+                        if (!text) continue;
+
+                        // 这里 text 就是后端 yield 的 content_piece 或错误信息
+                        assistantBubble.textContent += text;
+                        fullText += text;
+                        scrollToBottom();
+                    }
+                }
+
                 typingIndicator.classList.remove('active');
 
-                if (data.success) {
-                    // Add assistant message to UI
-                    addMessageToUI('assistant', data.message);
-                    chatHistory.push({ role: 'assistant', content: data.message });
-                    scrollToBottom();
-                } else {
-                    // Show error message
-                    addMessageToUI('assistant', '抱歉，发生错误：' + data.error);
+                if (!fullText) {
+                    assistantBubble.textContent = assistantBubble.textContent || '（AI未返回内容）';
                 }
+
+                // 把完整回答也加入本地 chatHistory（后端已经写入持久化）
+                chatHistory.push({ role: 'assistant', content: fullText || assistantBubble.textContent });
+
             } catch (error) {
                 typingIndicator.classList.remove('active');
-                addMessageToUI('assistant', '抱歉，网络错误：' + error.message);
+                assistantBubble.textContent = '抱歉，网络错误：' + error.message;
             } finally {
                 // Re-enable input
                 input.disabled = false;
@@ -933,7 +968,7 @@
         function handleChatKeyPress(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
-                sendMessage();
+                sendMessageStream();
             }
         }
 
@@ -1007,4 +1042,3 @@
     </script>
 </body>
 </html>
-
